@@ -131,7 +131,7 @@ works as ever::
 Underneath all this - glyph maps all of this to http::
 
     # by default, a server returns an object with a bunch
-    # of methods that redirect to the mapped obejcts
+    # of methods that redirect to the mapped objects
 
     server = glyph.get('http://server/')
 
