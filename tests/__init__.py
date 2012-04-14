@@ -15,7 +15,7 @@ class EncodingTest(unittest2.TestCase):
             None,
             True,
             False,
-            {'a':1},
+            {'a':1, 1:'b', 5.4:'x'},
             set([1,2,3]),
             glyph.utcnow(),
         ]

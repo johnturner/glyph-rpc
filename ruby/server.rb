@@ -3,23 +3,28 @@ require 'mongrel'
 require 'encoder'
 
 class GlyphRouter < Mongrel::HttpHandler
-  attr_accessor :mappers
+  attr_reader :mappers
 
   def initialize
     @mappers = {}
+    @encoder = Encoder.new
+  end
+
+  def dump obj
+    @encoder.dump obj
   end
 
   def process(request, response)
     if (@default)
       response.start(303) do |head,out|
-        head['Location'] = @default.uri
+        head['Location'] = @default.url
         head['Content-Type'] = 'text/html'
-        out.write("<a href=#{@default.uri}>Go here.</a>")
+        out.write("<a href=#{@default.url}>Go here.</a>")
       end
     else
       response.start(200) do |head,out|
         head['Content-Type'] = 'text/plain'
-        out.write("RPClol\n")
+        out.write("RPClol (no default)\n")
       end
     end
   end
@@ -27,11 +32,15 @@ class GlyphRouter < Mongrel::HttpHandler
   def add item
     if item.kind_of? Symbol
       mtd = method(item)
-      mapper = GlyphMethodMapper.new(mtd)
-      @mappers[mtd] = mapper
+      mapper = GlyphMethodMapper.new(mtd, self)
+      @mappers[item] = mapper
+      mapper
+    elsif item.kind_of? Method
+      mapper = GlyphMethodMapper.new(item, self)
+      @mappers[item.name.intern] = mapper
       mapper
     elsif item.kind_of? Class and item < GlyphResource
-      mapper = GlyphResourceMapper.new(item)
+      mapper = GlyphResourceMapper.new(item, self)
       @mappers[item] = mapper
       mapper
     end
@@ -41,13 +50,18 @@ class GlyphRouter < Mongrel::HttpHandler
     @default = add item
   end
 
+  def redirect item, code=303
+    handler = add item
+    handler.redirect=code
+  end
+
   def run
     r = self
     @config = Mongrel::Configurator.new :host => '0.0.0.0' do
       listener :port => 3000 do
         uri '/', :handler => r
         r.mappers.values.each do |mapper|
-          uri mapper.uri, :handler => mapper
+          uri mapper.url, :handler => mapper
         end
       end
       run
@@ -56,38 +70,62 @@ class GlyphRouter < Mongrel::HttpHandler
   end
 end
 
-class GlyphMethodMapper < Mongrel::HttpHandler
-  attr_accessor :uri
+class GlyphMapper < Mongrel::HttpHandler
+  attr_accessor :redirect
+  
+  def initialize router
+    @router = router
+  end
 
-  def initialize mtd
+  def get_args request
+    Mongrel::HttpRequest.query_parse request.params['QUERY_STRING']
+  end
+end
+
+class GlyphMethodMapper < GlyphMapper
+  attr_reader :url
+
+  def initialize mtd, router
+    super router
     @method = mtd
-    @uri = "/#{@method.name}"
+    @url = "/#{@method.name}"
   end
 
   def process(request, response)
-    response.start(200) do |head,out|
-      head['Content-Type'] = 'text/plain'
-      result = @method.call()
-      out.write("#{result}\n")
+    result = @method.call()
+    if @redirect
+      response.start(@redirect) do |head,out|
+        result = result.name.intern if result.kind_of? Method
+        url = @router.mappers[result].url
+        head['Location'] = url
+        head['Content-Type'] = 'text/html'
+        out.write("<a href=#{url}>Go here.</a>")
+      end
+    else
+      response.start(200) do |head,out|
+        head['Content-Type'] = Encoder::CONTENT_TYPE
+        out.write @router.dump(result)
+      end
     end
   end
 end
 
-class GlyphResourceMapper < Mongrel::HttpHandler
-  attr_accessor :uri
+class GlyphResourceMapper < GlyphMapper
+  attr_accessor :url
   
-  def initialize resource
+  def initialize resource, router
+    super router
     @resource = resource
-    @uri = "/#{resource.name.gsub('::', '/')}"
+    @url = "/#{resource.name.gsub('::', '/')}"
   end
   
   def process(request, response)
-    args = Mongrel::HttpRequest.query_parse request.params['QUERY_STRING']
+    args = get_args request
 
     response.start(200) do |head,out|
-      head['Content-Type'] = 'text/plain'
-      out.write("Resource: #{@resource.name}\n")
-      out.write("Params: #{args.inspect}\n")
+      head['Content-Type'] = Encoder::CONTENT_TYPE
+      out.write "Resource: #{@resource.name}\n"
+      out.write "Params: #{args.inspect}\n"
     end
   end
 end
