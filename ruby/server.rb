@@ -1,6 +1,6 @@
 require 'rubygems'
 require 'mongrel'
-require 'encoder'
+require './encoder'
 
 class GlyphRouter < Mongrel::HttpHandler
   attr_reader :mappers
@@ -80,6 +80,9 @@ class GlyphMapper < Mongrel::HttpHandler
   def get_args request
     Mongrel::HttpRequest.query_parse request.params['QUERY_STRING']
   end
+
+  def get
+  end
 end
 
 class GlyphMethodMapper < GlyphMapper
@@ -111,17 +114,24 @@ class GlyphMethodMapper < GlyphMapper
 end
 
 class GlyphResourceMapper < GlyphMapper
-  attr_accessor :url
+  attr_reader :url
   
+  def name
+    @resource.name.gsub('::', '/')
+  end
+
   def initialize resource, router
     super router
     @resource = resource
-    @url = "/#{resource.name.gsub('::', '/')}"
+    @url = "/#{name}"
   end
   
   def process(request, response)
     args = get_args request
 
+    #attributes = @resource.attribs
+    #node = Node.new(name, @resource.methods, 
+    
     response.start(200) do |head,out|
       head['Content-Type'] = Encoder::CONTENT_TYPE
       out.write "Resource: #{@resource.name}\n"
@@ -130,5 +140,29 @@ class GlyphResourceMapper < GlyphMapper
   end
 end
 
-class GlyphResource
+class GlyphResource < Object
+  class << self
+    attr_reader :attributes
+    def attr attrib
+      @attributes ||= Set.new
+      @attributes << attrib
+      super(attrib)
+    end
+    
+    def attr_reader attrib
+      @attributes ||= Set.new
+      @attributes << attrib
+      super(attrib)
+    end
+
+    def attr_accessor attrib
+      @attributes ||= Set.new
+      @attributes << attrib
+      super(attrib)
+    end
+  end
+
+  def index
+    
+  end
 end

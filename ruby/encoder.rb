@@ -1,5 +1,5 @@
 require 'set'
-require 'data'
+require './data'
 
 class Encoder
   CONTENT_TYPE='application/vnd.glyph'
@@ -39,7 +39,7 @@ class Encoder
       str << NONE
     elsif @extension === obj
       str << EXT
-      name, attributes, content = obj._get_state
+      name, attributes, content = obj._state
       obj.resolve &resolver
       dump name, str, &resolver
       dump attributes, str, &resolver
@@ -47,7 +47,7 @@ class Encoder
       
     elsif @node === obj
       str << NODE if @node === obj
-      name, attributes, content = obj._get_state
+      name, attributes, content = obj._state
       dump name, str, &resolver
       dump attributes, str, &resolver
       dump content, str, &resolver
